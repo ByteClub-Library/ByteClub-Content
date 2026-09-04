@@ -33,7 +33,6 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         with:
-          comment_mode: update
           script: |
             const total = parseInt(process.env.GITHUB_CHANGED_TOTAL) || 0;
             const added = process.env.GITHUB_CHANGED_ADDED || '';
@@ -47,7 +46,7 @@ jobs:
             result += `- **Deleted**: ${deleted ? deleted.split(',').length : 0} entries\n`;
             result += `\nThe incremental indexing workflow has completed. Only affected entries were synced to the API.\n---\n*This is an automated indexing run.*`;
             
-            github.restissues.createComment({
+            github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,

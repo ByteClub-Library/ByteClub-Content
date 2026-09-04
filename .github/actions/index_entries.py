@@ -142,7 +142,7 @@ def main():
 
     # Get secrets from environment
     auth_token = os.getenv("BYTECLUB_SYNC_TOKEN", "")
-    api_base = os.getenv("BYTECLUB_API_URL", "https://api.byteclub.dev")
+    api_base = os.getenv("BYTECLUB_API_URL", "https://api.byteclub.space")
     api_url = f"{api_base}/internal/sync"
 
     if not auth_token:
