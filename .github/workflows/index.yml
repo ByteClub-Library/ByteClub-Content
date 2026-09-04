@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: Content-repository
+        working-directory: .
 
     steps:
       - name: Checkout repository

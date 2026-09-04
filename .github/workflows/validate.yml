@@ -3,17 +3,17 @@ name: Validate PR
 "on":
   pull_request:
     paths:
-      - 'Content-repository/entries/**'
-      - 'Content-repository/templates/entry.yaml'
-      - 'Content-repository/docs/**'
-      - 'Content-repository/schema/entry.schema.json'
+      - 'entries/**'
+      - 'templates/entry.yaml'
+      - 'docs/**'
+      - 'schema/entry.schema.json'
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: Content-repository
+        working-directory: .
 
     steps:
       - name: Checkout repository
