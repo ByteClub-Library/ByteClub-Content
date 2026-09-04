@@ -1,0 +1,228 @@
+name: Incremental Indexing
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install API client dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Get changed files between commits
+        id: changed
+        run: |
+          # Get files changed between previous commit and current
+          if [ "$GITHUB_SHA" = "$GITHUB_BASE_SHA" ]; then
+            # First push to main - compare with empty tree
+            CHANGED_FILES=$(git diff --name-only /dev/null HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only $GITHUB_BASE_SHA HEAD)
+          fi
+          
+          echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+          
+          # Count changed entries
+          ENTRY_CHANGES=0
+          if [ -n "$CHANGED_FILES" ]; then
+            for file in $CHANGED_FILES; do
+              if [[ -d "entries/$file" ]] && [[ -f "entries/$file/entry.yaml" ]]; then
+                ENTRY_CHANGES=$((ENTRY_CHANGES + 1))
+              fi
+            done
+          fi
+          echo "entry_changes=$ENTRY_CHANGES" >> $GITHUB_OUTPUT
+          
+          echo "Summary: $ENTRY_CHANGES entries changed"
+
+      - name: Determine affected entries
+        id: entries
+        run: |
+          declare -A ADDED
+          declare -A MODIFIED
+          DELETED=()
+          
+          CHANGED="${{ steps.changed.outputs.changed_files }}"
+          
+          # Parse added/modified entries from diff
+          if [ -n "$CHANGED_FILES" ]; then
+            for file in $CHANGED_FILES; do
+              if [[ -d "entries/$file" ]] && [[ -f "entries/$file/entry.yaml" ]]; then
+                # Check if it's a new entry (not in previous commit)
+                if [ -n "$GITHUB_BASE_SHA" ]; then
+                  if git diff --name-only $GITHUB_BASE_SHA HEAD | grep -q "entries/$file/entry.yaml"; then
+                    MODIFIED["$file"]="modified"
+                  else
+                    ADDED["$file"]="added"
+                  fi
+                else
+                  ADDED["$file"]="first_push"
+                fi
+              fi
+            done
+          fi
+          
+          # Detect deletions: entries that existed before but not now
+          if [ -n "$GITHUB_BASE_SHA" ]; then
+            PREV_ENTRIES=$(git ls-tree -r --name-only $GITHUB_BASE_SHA | grep "^entries/" | sed 's|^entries/||' || true)
+            CURR_ENTRIES=$(find entries -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort || true)
+            
+            for entry in $PREV_ENTRIES; do
+              if ! echo "$CURR_ENTRIES" | grep -qx "$entry"; then
+                DELETED+=("$entry")
+              fi
+            done
+          fi
+          
+          # Output results
+          echo "added_entries=$(printf '%s\n' "${!ADDED[@]}" | paste -sd, -)" >> $GITHUB_OUTPUT
+          echo "modified_entries=$(printf '%s\n' "${!MODIFIED[@]}" | paste -sd, -)" >> $GITHUB_OUTPUT
+          echo "deleted_entries=$(printf '%s\n' "${DELETED[@]}" | paste -sd, -)" >> $GITHUB_OUTPUT
+          
+          total=$(( ${#ADDED[@]} + ${#MODIFIED[@]} + ${#DELETED[@]} ))
+          echo "total_changed=$total" >> $GITHUB_OUTPUT
+          
+          echo "Added: ${!ADDED[@]}"
+          echo "Modified: ${!MODIFIED[@]}"
+          echo "Deleted: ${DELETED[*]}"
+
+      - name: Initialize API sync payload
+        id: payload
+        run: |
+          cat > /tmp/sync_payload.json << 'PAYLOAD_EOF'
+          {
+            "commit": "$GITHUB_SHA",
+            "changes": []
+          }
+          PAYLOAD_EOF
+          
+          # Add upsert entries
+          for entry in ${{ steps.entries.outputs.added_entries }}; do
+            slug="$entry"
+            # Read entry data from the entry directory
+            if [ -f "entries/$slug/entry.yaml" ]; then
+              # Parse YAML fields using python
+              eval $(python3 -c "
+import yaml, sys
+with open('entries/$slug/entry.yaml') as f:
+    d = yaml.safe_load(f)
+for k, v in d.items():
+    # Escape and quote for JSON
+    v_str = json.dumps(v)
+    print(f'CHANGE_{k}=\"{v_str}\"')
+")
+              NAME="$CHANGE_NAME"
+              TYPE="$CHANGE_TYPE"
+              CATEGORIES="$CHANGE_CATEGORIES"
+              TAGS="$CHANGE_TAGS"
+              GAMES="$CHANGE_GAMES"
+              DESCRIPTION="$CHANGE_DESCRIPTION"
+              MEDIA="$CHANGE_MEDIA"
+              CONTRIBUTOR="$CHANGE_CONTRIBUTOR"
+            fi
+            
+            # Add upsert change
+            cat >> /tmp/sync_payload.json << PAYLOAD_EOF
+            {
+              "action": "upsert",
+              "entry": {
+                "slug": "$slug",
+                "name": "$NAME",
+                "type": "$TYPE",
+                "category": $CATEGORIES,
+                "tags": $TAGS,
+                "games": $GAMES,
+                "description": "$DESCRIPTION",
+                "media": $MEDIA,
+                "contributor": $CONTRIBUTOR
+              }
+            }
+            PAYLOAD_EOF
+          done
+          
+          # Add delete entries
+          for slug in ${{ steps.entries.outputs.deleted_entries }}; do
+            cat >> /tmp/sync_payload.json << PAYLOAD_EOF
+            {
+              "action": "delete",
+              "slug": "$slug"
+            }
+            PAYLOAD_EOF
+          done
+          
+          # Output the payload file path
+          echo "payload_file=/tmp/sync_payload.json" >> $GITHUB_OUTPUT
+
+      - name: Sync to API
+        env:
+          AUTH_TOKEN: ${{ secrets.BYTECLUB_SYNC_TOKEN }}
+          API_URL: https://api.byteclub.dev/internal/sync
+        run: |
+          PAYLOAD="${{ steps.payload.outputs.payload_file }}"
+          
+          if [ ! -f "$PAYLOAD" ]; then
+            echo "::notice::No changes to index."
+            exit 0
+          fi
+          
+          echo "Syncing payload to API..."
+          
+          # Build the curl command
+          CMD="curl -s -X POST"
+          CMD+=" -H \"Authorization: Bearer $AUTH_TOKEN\""
+          CMD+=" -H \"Content-Type: application/json\""
+          CMD+=" -d @$PAYLOAD"
+          CMD+=" $API_URL"
+          
+          RESULT=$(eval $CMD)
+          echo "API response: $RESULT"
+          
+          # Check response
+          if echo "$RESULT" | grep -q "error"; then
+            echo "::error:: API sync failed"
+            exit 1
+          fi
+          
+          echo "Indexing complete."
+
+      - name: Comment PR with Indexing Results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          comment_mode: update
+          script: |
+            const total = parseInt(`${{ steps.entries.outputs.total_changed }}`) || 0;
+            const added = `${{ steps.entries.outputs.added_entries }}` || '';
+            const modified = `${{ steps.entries.outputs.modified_entries }}` || '';
+            const deleted = `${{ steps.entries.outputs.deleted_entries }}` || '';
+            
+            let result = `**Indexing Status**: Complete\n`;
+            result += `- **Total changed**: $total entries\n`;
+            result += `- **Added**: ${added ? added.split(',').length : 0} entries\n`;
+            result += `- **Modified**: ${modified ? modified.split(',').length : 0} entries\n`;
+            result += `- **Deleted**: ${deleted ? deleted.split(',').length : 0} entries\n`;
+            result += `\nThe incremental indexing workflow has completed. Only affected entries were synced to the API.\n---\n*This is an automated indexing run.*`;
+            
+            github.restissues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: result
+            });

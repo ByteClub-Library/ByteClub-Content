@@ -1,0 +1,312 @@
+name: Validate PR
+
+on:
+  pull_request:
+    paths:
+      - 'entries/**'
+      - 'templates/entry.yaml'
+      - 'docs/**'
+      - 'schema/entry.schema.json'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jsonschema
+
+      - name: Detect changed entries
+        id: changed-entries
+        run: |
+          # Get list of changed files in the PR
+          CHANGED_FILES=$(git diff --name-only HEAD || git diff --name-only origin/main)
+          
+          # Track entry directories
+          ADDED=()
+          MODIFIED=()
+          DELETED=()
+          
+          # Process added/modified files
+          for file in $CHANGED_FILES; do
+            # Check for new entry directories
+            if [[ -d "entries/$file" ]] && [[ -f "entries/$file/entry.yaml" ]]; then
+              if git rev-parse --verify HEAD >/dev/null 2>&1; then
+                # New file (added)
+                ADDED+=("$file")
+              else
+                # Modified
+                MODIFIED+=("$file")
+              fi
+            fi
+          done
+          
+          # Check for deleted entry directories
+          # List current entries, compare with previous state
+          CURRENT_ENTRIES=$(find entries -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort)
+          echo "current_entries=$CURRENT_ENTRIES" >> $GITHUB_OUTPUT
+          
+          echo "added_entries=${ADDED[*]}" >> $GITHUB_OUTPUT
+          echo "modified_entries=${MODIFIED[*]}" >> $GITHUB_OUTPUT
+          
+          if [ ${#ADDED[@]} -eq 0 ] && [ ${#MODIFIED[@]} -eq 0 ]; then
+            echo "No new or modified entries detected."
+          fi
+          
+          # Check for deletions by comparing current vs previous
+          PREV_ENTRIES=$(git show HEAD:entries 2>/dev/null | find entries -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort || echo "")
+          CURR_ENTRIES=$(find entries -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort || echo "")
+          
+          # Find entries in previous but not current (deleted)
+          for entry in $PREV_ENTRIES; do
+            if ! echo "$CURR_ENTRIES" | grep -qx "$entry"; then
+              DELETED+=("$entry")
+            fi
+          done
+          
+          echo "deleted_entries=${DELETED[*]}" >> $GITHUB_OUTPUT
+          
+          # Summary
+          echo "Summary: added=${ADDED[*]}, modified=${MODIFIED[*]}, deleted=${DELETED[*]}"
+          
+          # Exit if no entries changed
+          if [ ${#ADDED[@]} -eq 0 ] && [ ${#MODIFIED[@]} -eq 0 ] && [ ${#DELETED[@]} -eq 0 ]; then
+            echo "::notice::No entry changes detected in this PR."
+            echo "::set-output name=skip-validation::true"
+          fi
+
+      - name: Run Validation on Affected Entries
+        if: steps.changed-entries.outputs.skip-validation != 'true'
+        env:
+          SCHEMA_PATH: schema/entry.schema.json
+        run: |
+          # Collect all entries to validate (added + modified + deleted tracking)
+          ENTRY_DIRS=""
+          
+          # Added entries
+          for entry in ${{ steps.changed-entries.outputs.added_entries }}; do
+            ENTRY_DIRS="$ENTRY_DIRS entries/$entry"
+          done
+          
+          # Modified entries
+          for entry in ${{ steps.changed-entries.outputs.modified_entries }}; do
+            ENTRY_DIRS="$ENTRY_DIRS entries/$entry"
+          done
+          
+          # Deleted entries - just check they were properly deleted
+          for entry in ${{ steps.changed-entries.outputs.deleted_entries }}; do
+            ENTRY_DIRS="$ENTRY_DIRS entries/$entry"
+          done
+          
+          # If no specific entries detected but we're in an entries-changed PR,
+          # validate all entries
+          if [ -z "$ENTRY_DIRS" ]; then
+            ENTRY_DIRS=$(find entries -mindepth 1 -maxdepth 1 -type d)
+          fi
+          
+          echo "Validating entries: $ENTRY_DIRS"
+          
+          # Validation loop
+          ERRORS=0
+          
+          for entry_dir in $ENTRY_DIRS; do
+            entry_name=$(basename "$entry_dir")
+            yaml_file="$entry_dir/entry.yaml"
+            readme_file="$entry_dir/README.md"
+            schema_file="$SCHEMA_PATH"
+          
+            echo "=== Validating: $entry_name ==="
+          
+            # 1. Check YAML is parseable
+            if ! python3 -c "import yaml; yaml.safe_load(open('$yaml_file'))" 2>/dev/null; then
+              echo "::error file=$yaml_file:: Malformed YAML"
+              ERRORS=$((ERRORS + 1))
+              continue
+            fi
+          
+            # 2. Check README.md exists
+            if [ ! -f "$readme_file" ]; then
+              echo "::error file=$readme_file:: README.md is required but missing"
+              ERRORS=$((ERRORS + 1))
+              continue
+            fi
+          
+            # 3. Check directory name == slug
+            slug_in_yaml=$(python3 -c "import yaml; d=yaml.safe_load(open('$yaml_file')); print(d.get('slug',''))" 2>/dev/null)
+            dir_name=$(basename "$entry_dir")
+            if [ "$slug_in_yaml" != "$dir_name" ]; then
+              echo "::error:: Directory name '$dir_name' does not match slug '$slug_in_yaml' in entry.yaml"
+              ERRORS=$((ERRORS + 1))
+              continue
+            fi
+          
+            # 4. Validate against JSON schema
+            python3 -c "
+import yaml, json, jsonschema
+with open('$yaml_file') as f:
+    data = yaml.safe_load(f)
+with open('$schema_file') as f:
+    schema = json.load(f)
+try:
+    jsonschema.validate(data, schema)
+    print('Schema validation passed')
+except jsonschema.ValidationError as e:
+    print(f'Schema validation failed: {e.message}')
+    exit(1)
+" || {
+              echo "::error:: Schema validation failed for $entry_name"
+              ERRORS=$((ERRORS + 1))
+            }
+          
+            # 5. Check required fields via schema
+            python3 -c "
+import yaml, json
+with open('$yaml_file') as f:
+    data = yaml.safe_load(f)
+with open('$schema_file') as f:
+    schema = json.load(f)
+# Check specific required fields
+required = schema.get('required', [])
+missing = [f for f in required if f not in data]
+if missing:
+    print(f'Missing required fields: {missing}')
+    exit(1)
+print('Required fields present')
+" || {
+              echo "::error:: Required field check failed for $entry_name"
+              ERRORS=$((ERRORS + 1))
+            }
+          
+            # 6. Check type is valid
+            python3 -c "
+import yaml
+with open('$yaml_file') as f:
+    data = yaml.safe_load(f)
+valid_types = ['mechanic', 'system', 'level_design', 'game_feel', 'ui_ux', 'ai']
+entry_type = data.get('type')
+if entry_type not in valid_types:
+    print(f'Invalid type: {entry_type}. Must be one of: {valid_types}')
+    exit(1)
+print(f'Type valid: {entry_type}')
+" || {
+              echo "::error:: Invalid type for $entry_name"
+              ERRORS=$((ERRORS + 1))
+            }
+          
+            # 7. Check categories is array of strings
+            python3 -c "
+import yaml
+with open('$yaml_file') as f:
+    data = yaml.safe_load(f)
+cats = data.get('categories', [])
+if not isinstance(cats, list) or len(cats) == 0:
+    print('Categories must be a non-empty array')
+    exit(1)
+for c in cats:
+    if not isinstance(c, str):
+        print(f'Category must be a string: {c}')
+        exit(1)
+print('Categories valid')
+" || {
+              echo "::error:: Invalid categories for $entry_name"
+              ERRORS=$((ERRORS + 1))
+            }
+          
+            # 8. Check tags is array of strings
+            python3 -c "
+import yaml
+with open('$yaml_file') as f:
+    data = yaml.safe_load(f)
+tags = data.get('tags', [])
+if not isinstance(tags, list) or len(tags) == 0:
+    print('Tags must be a non-empty array')
+    exit(1)
+for t in tags:
+    if not isinstance(t, str):
+        print(f'Tag must be a string: {t}')
+        exit(1)
+print('Tags valid')
+" || {
+              echo "::error:: Invalid tags for $entry_name"
+              ERRORS=$((ERRORS + 1))
+            }
+          
+            # 9. Check games is array
+            python3 -c "
+import yaml
+with open('$yaml_file') as f:
+    data = yaml.safe_load(f)
+games = data.get('games', [])
+if not isinstance(games, list):
+    print('Games must be an array')
+    exit(1)
+print('Games valid')
+" || {
+              echo "::error:: Invalid games for $entry_name"
+              ERRORS=$((ERRORS + 1))
+            }
+          done
+          
+          # Check for duplicate slugs across all entries
+          python3 -c "
+import os, yaml, json
+entries_dir = 'entries'
+slugs = []
+duplicates = []
+for entry_dir in os.listdir(entries_dir):
+    full_path = os.path.join(entries_dir, entry_dir)
+    if os.path.isdir(full_path) and os.path.isfile(os.path.join(full_path, 'entry.yaml')):
+        with open(os.path.join(full_path, 'entry.yaml')) as f:
+            data = yaml.safe_load(f)
+        slug = data.get('slug', '')
+        if slug in slugs:
+            duplicates.append(slug)
+        slugs.append(slug)
+          
+if duplicates:
+    print(f'Duplicate slugs found: {duplicates}')
+    exit(1)
+print(f'No duplicate slugs. Total entries: {len(slugs)}')
+" || {
+              echo "::error:: Duplicate slugs detected across repository"
+              ERRORS=$((ERRORS + 1))
+            }
+          
+          echo "=== Validation complete. Errors: $ERRORS ==="
+          if [ $ERRORS -gt 0 ]; then
+            echo "::stop-job::Validation failed with $ERRORS error(s)"
+            exit 1
+          fi
+
+      - name: Comment PR with Validation Results
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          comment_mode: update
+          script: |
+            const result = `**Validation Status**: ${process.env.GITHUB_ACTION_STATUS || 'check'}
+
+            The validation workflow has completed. Check the logs above for details on any entries that were validated.
+
+            -- 
+            *This is an automated validation run.*
+            `
+            github.restissues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: result
+            })
