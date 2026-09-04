@@ -3,17 +3,17 @@ name: Validate PR
 "on":
   pull_request:
     paths:
-      - 'entries/**'
-      - 'templates/entry.yaml'
-      - 'docs/**'
-      - 'schema/entry.schema.json'
+      - 'Content-repository/entries/**'
+      - 'Content-repository/templates/entry.yaml'
+      - 'Content-repository/docs/**'
+      - 'Content-repository/schema/entry.schema.json'
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: .
+        working-directory: Content-repository
 
     steps:
       - name: Checkout repository
@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install jsonschema
+          pip install jsonschema pyyaml
 
       - name: Run entry validation
         run: python scripts/validate.py
