@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ByteClub Entry Schema",
+  "type": "object",
+  "required": ["name", "slug", "type", "categories", "tags", "games", "description"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable entry name"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Unique identifier; must match directory name"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["mechanic", "system", "level_design", "game_feel", "ui_ux", "ai"],
+      "description": "Kind of entry; controlled vocabulary"
+    },
+    "categories": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1,
+      "description": "User-defined categories for this entry"
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1,
+      "description": "Arbitrary tags for discovery"
+    },
+    "games": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Games this entry relates to"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Description of the entry"
+    },
+    "media": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {"type": "string", "enum": ["image", "video", "gif", "external"]},
+          "url": {"type": "string", "format": "uri"},
+          "source": {"type": "string"}
+        },
+        "description": "Media reference"
+      },
+      "description": "Media references (images, videos, GIFs, URLs)"
+    },
+    "contributor": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "github": {"type": "string"}
+      },
+      "required": ["name"],
+      "description": "Who contributed this entry"
+    }
+  },
+  "additionalProperties": false
+}
