@@ -6,7 +6,7 @@ then upserts/deletes them via the API's /internal/sync endpoint.
 
 Uses:
 - BYTECLUB_SYNC_TOKEN secret for Authorization: Bearer header
-- API_URL secret for the API endpoint
+- BYTECLUB_API_URL secret for the API base URL (e.g., https://api.example.com)
 - GitHub context for commit SHA and changed files
 """
 
@@ -142,7 +142,8 @@ def main():
 
     # Get secrets from environment
     auth_token = os.getenv("BYTECLUB_SYNC_TOKEN", "")
-    api_url = os.getenv("API_URL", "https://api.byteclub.dev/internal/sync")
+    api_base = os.getenv("BYTECLUB_API_URL", "https://api.byteclub.dev")
+    api_url = f"{api_base}/internal/sync"
 
     if not auth_token:
         print("::error:: Missing BYTECLUB_SYNC_TOKEN secret.")

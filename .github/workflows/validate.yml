@@ -30,7 +30,7 @@ jobs:
           pip install jsonschema
 
       - name: Run entry validation
-        run: python .github/actions/validate_entries.py
+        run: python scripts/validate.py
 
       - name: Add validation comment
         if: always()
