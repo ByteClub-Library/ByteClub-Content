@@ -1,0 +1,30 @@
+name: Grappling Hook
+slug: grappling-hook
+
+type: mechanic
+
+categories:
+  - movement
+  - traversal
+
+tags:
+  - mobility
+  - physics
+  - momentum
+
+games:
+  - Terraria
+  - Bionic Commando
+
+description: >
+  A traversal mechanic that allows the player
+  to attach to surfaces and move through the environment.
+
+media:
+  - type: video
+    url: https://example.com/video
+    source: youtube
+
+contributor:
+  name: ByteClub
+  github: byteclub
