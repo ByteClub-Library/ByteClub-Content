@@ -1,0 +1,31 @@
+name: Coyote Time
+slug: coyote-time
+
+type: game_feel
+
+categories:
+  - movement
+  - player-controls
+
+tags:
+  - jump
+  - forgiveness
+  - platforming
+  - responsiveness
+
+games:
+  - Celeste
+  - Super Meat Boy
+  - Hollow Knight
+  - Ori and the Blind Forest
+
+description: >
+  A brief grace period after leaving a platform during which
+  the player can still jump, making platforming feel fairer
+  and more responsive.
+
+media: []
+
+contributor:
+  name: ByteClub
+  github: byteclub

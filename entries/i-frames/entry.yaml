@@ -1,0 +1,30 @@
+name: I-Frames
+slug: i-frames
+
+type: mechanic
+
+categories:
+  - combat
+  - damage-systems
+
+tags:
+  - invincibility
+  - hit-recovery
+  - damage-feedback
+  - combat-flow
+
+games:
+  - Dark Souls
+  - Hollow Knight
+  - Celeste
+  - Dead Cells
+
+description: >
+  A brief window of invincibility after taking damage, preventing
+  consecutive hits and giving the player time to recover.
+
+media: []
+
+contributor:
+  name: ByteClub
+  github: byteclub

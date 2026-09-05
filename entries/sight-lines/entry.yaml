@@ -1,0 +1,31 @@
+name: Sight Lines
+slug: sight-lines
+
+type: level_design
+
+categories:
+  - environment
+  - player-guidance
+
+tags:
+  - visibility
+  - exploration
+  - environmental-storytelling
+  - player-direction
+
+games:
+  - The Last of Us
+  - Dark Souls
+  - Metroid Prime
+  - BioShock
+
+description: >
+  The deliberate control of what the player can and cannot
+  see at any given moment, used to guide exploration,
+  create tension, reveal secrets, and direct player flow.
+
+media: []
+
+contributor:
+  name: ByteClub
+  github: byteclub

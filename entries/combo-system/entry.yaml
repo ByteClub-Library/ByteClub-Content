@@ -1,0 +1,31 @@
+name: Combo System
+slug: combo-system
+
+type: system
+
+categories:
+  - combat
+  - progression
+
+tags:
+  - chained-attacks
+  - timing
+  - rhythm
+  - damage-scaling
+
+games:
+  - Devil May Cry 5
+  - Bayonetta
+  - Street Fighter 6
+  - Hades
+
+description: >
+  A combat system where sequential attacks chain together
+  into fluid sequences, often with escalating damage, style
+  ratings, or unlockable finishers.
+
+media: []
+
+contributor:
+  name: ByteClub
+  github: byteclub

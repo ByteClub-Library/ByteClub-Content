@@ -1,0 +1,31 @@
+name: Input Buffering
+slug: input-buffering
+
+type: game_feel
+
+categories:
+  - player-controls
+  - responsiveness
+
+tags:
+  - input
+  - responsiveness
+  - animation
+  - latency
+
+games:
+  - Celeste
+  - Street Fighter 6
+  - Hollow Knight
+  - Dead Cells
+
+description: >
+  Recording player inputs during animations and executing
+  them as soon as the current action completes, making
+  controls feel responsive even during long animations.
+
+media: []
+
+contributor:
+  name: ByteClub
+  github: byteclub

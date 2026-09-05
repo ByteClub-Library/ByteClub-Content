@@ -1,0 +1,31 @@
+name: Enemy AI Patrol
+slug: enemy-patrol
+
+type: ai
+
+categories:
+  - enemy-behavior
+  - encounter-design
+
+tags:
+  - patrol
+  - detection
+  - behavior-tree
+  - stealth
+
+games:
+  - Metal Gear Solid V
+  - "Alien: Isolation"
+  - The Last of Us
+  - Dishonored
+
+description: >
+  A foundational AI behavior where enemies follow defined
+  paths or routines, creating predictable patterns that
+  players can observe, learn, and exploit.
+
+media: []
+
+contributor:
+  name: ByteClub
+  github: byteclub

@@ -1,0 +1,31 @@
+name: Parry
+slug: parry
+
+type: mechanic
+
+categories:
+  - combat
+  - defense
+
+tags:
+  - timing
+  - counter
+  - skill-expression
+  - risk-reward
+
+games:
+  - "Sekiro: Shadows Die Twice"
+  - Street Fighter 6
+  - Dead Cells
+  - Cuphead
+
+description: >
+  A high-skill defensive mechanic where the player deflects
+  an attack at the exact moment of impact, often rewarding
+  with a counter-attack opportunity or posture damage.
+
+media: []
+
+contributor:
+  name: ByteClub
+  github: byteclub

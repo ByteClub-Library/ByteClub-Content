@@ -1,0 +1,31 @@
+name: Spawn Waves
+slug: spawn-waves
+
+type: system
+
+categories:
+  - encounter-design
+  - difficulty
+
+tags:
+  - enemy-spawning
+  - pacing
+  - difficulty-curve
+  - encounter-rhythm
+
+games:
+  - Left 4 Dead 2
+  - Deep Rock Galactic
+  - Vampire Survivors
+  - Risk of Rain 2
+
+description: >
+  An encounter system where enemies arrive in structured or
+  dynamic waves, controlling pacing, difficulty escalation,
+  and resource management across a combat encounter.
+
+media: []
+
+contributor:
+  name: ByteClub
+  github: byteclub
